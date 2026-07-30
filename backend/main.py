@@ -17,13 +17,28 @@ _ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_ROOT / "utilities_data" / "transcribe"))
 
 from dotenv import load_dotenv
+
+# In a packaged install the app directory is read-only, so API keys live in the
+# per-user config directory that Electron passes down (app.getPath("userData")).
+# The repo-root .env still wins for `make dev`, where it is the obvious place to
+# look. First value loaded wins — python-dotenv does not override by default.
+_CONFIG_DIR = os.getenv("TRANSCRIBE_CONFIG_DIR")
+if _CONFIG_DIR:
+    load_dotenv(Path(_CONFIG_DIR) / ".env")
 load_dotenv(_ROOT / ".env")
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from jobs import Job, JobStatus, create_job, get_job
+from summarize import (
+    SummaryNotConfiguredError,
+    SummaryProviderError,
+    summarization_available,
+    summarize_transcript,
+)
 
 # ---------------------------------------------------------------------------
 # App
@@ -74,6 +89,7 @@ def health():
             "deepgram": deepgram_ready,
             "whisper": whisper_ready,
         },
+        "summarization": summarization_available(),
     }
 
 
@@ -302,7 +318,7 @@ def download_transcript(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status != JobStatus.COMPLETED:
-        raise HTTPException(status_code=409, detail=f"Job is {job.status}, not completed yet")
+        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not completed yet")
     if not job.transcript:
         raise HTTPException(status_code=404, detail="Transcript not available")
 
@@ -310,6 +326,56 @@ def download_transcript(job_id: str):
         "transcript": job.transcript,
         "filename": f"{Path(job.filename).stem}.md",
     })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/summarize — AI summary of a finished transcript
+# ---------------------------------------------------------------------------
+
+class SummarizeRequest(BaseModel):
+    transcript: str = Field(..., min_length=1, description="Transcript markdown to summarise")
+    title: Optional[str] = Field(None, description="Recording title, used as context")
+    model: Optional[str] = Field(None, description="Override the summarisation model")
+
+
+@app.post("/api/summarize")
+def summarize(payload: SummarizeRequest):
+    try:
+        result = summarize_transcript(
+            payload.transcript,
+            title=payload.title,
+            model=payload.model or None,
+        )
+    except SummaryNotConfiguredError as exc:
+        # 503: the server is fine, it just has no key configured.
+        raise HTTPException(status_code=503, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except SummaryProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return {
+        "summary": result.summary,
+        "model": result.model,
+        "chunks": result.chunks,
+        "source_chars": result.source_chars,
+    }
+
+
+@app.post("/api/jobs/{job_id}/summary")
+def summarize_job(job_id: str, model: str = Form("")):
+    """Summarise a completed job's transcript without re-uploading it."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != JobStatus.COMPLETED or not job.transcript:
+        raise HTTPException(status_code=409, detail=f"Job is {job.status.value}, not completed yet")
+
+    return summarize(SummarizeRequest(
+        transcript=job.transcript,
+        title=Path(job.filename).stem,
+        model=model or None,
+    ))
 
 
 # ---------------------------------------------------------------------------

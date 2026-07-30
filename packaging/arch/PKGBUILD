@@ -1,0 +1,74 @@
+# Maintainer: Nirajan Karki <karkinirajan1999@gmail.com>
+#
+# Native Arch/CachyOS package built with makepkg from the tar.gz that
+# electron-builder produces. Use this when you want a package built by real
+# Arch tooling (proper .pkg.tar.zst, namcap-checkable) rather than the fpm
+# approximation the electron-builder `pacman` target emits.
+#
+#   uv run scripts/build_installers.py --variant standard --targets tar.gz
+#   cd packaging/arch && makepkg -si
+#
+# Build the offline (local Whisper) flavour with:
+#   VARIANT=offline makepkg -si
+
+pkgname=transcribe
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Audio and video transcription with speaker identification and AI summaries"
+arch=('x86_64')
+url="https://github.com/karkinirajan/transcribe"
+license=('MIT')
+# The app bundles its own Python, ffmpeg and Node, so these are only the
+# shared libraries Electron itself links against.
+depends=('gtk3' 'nss' 'alsa-lib')
+options=('!strip' '!debug')
+
+_variant="${VARIANT:-}"
+_suffix=""
+[[ -n "$_variant" && "$_variant" != "standard" ]] && _suffix="-${_variant}"
+
+_tarball="transcribe-${pkgver}${_suffix}-x64.tar.gz"
+source=("file://../../electron/dist/${_tarball}")
+sha256sums=('SKIP')
+
+package() {
+    install -dm755 "${pkgdir}/opt/${pkgname}"
+    cp -a "${srcdir}/transcribe-${pkgver}${_suffix}-x64/." "${pkgdir}/opt/${pkgname}/"
+
+    # Launcher on PATH
+    install -dm755 "${pkgdir}/usr/bin"
+    ln -sf "/opt/${pkgname}/transcribe" "${pkgdir}/usr/bin/${pkgname}"
+
+    # chrome-sandbox must be setuid root or Electron refuses to start.
+    if [[ -f "${pkgdir}/opt/${pkgname}/chrome-sandbox" ]]; then
+        chmod 4755 "${pkgdir}/opt/${pkgname}/chrome-sandbox"
+    fi
+
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/${pkgname}.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Transcribe
+GenericName=Transcription Tool
+Comment=Transcribe audio and video with speaker identification and AI summaries
+Exec=/opt/transcribe/transcribe %U
+Icon=transcribe
+Terminal=false
+StartupWMClass=Transcribe
+Categories=AudioVideo;Audio;Utility;
+Keywords=transcription;audio;video;speech;subtitles;summary;
+MimeType=audio/mpeg;audio/wav;audio/flac;audio/ogg;video/mp4;video/x-matroska;video/quicktime;
+DESKTOP
+
+    # Icons shipped inside the bundle, if electron-builder included them.
+    for _size in 16 32 48 64 128 256 512; do
+        _icon="${srcdir}/transcribe-${pkgver}${_suffix}-x64/usr/share/icons/hicolor/${_size}x${_size}/apps/${pkgname}.png"
+        [[ -f "$_icon" ]] && install -Dm644 "$_icon" \
+            "${pkgdir}/usr/share/icons/hicolor/${_size}x${_size}/apps/${pkgname}.png"
+    done
+
+    # Fallback: use the source icon if the tarball carried none.
+    if [[ ! -d "${pkgdir}/usr/share/icons" ]]; then
+        install -Dm644 "${startdir}/../../electron/build-resources/icon.png" \
+            "${pkgdir}/usr/share/icons/hicolor/512x512/apps/${pkgname}.png"
+    fi
+}

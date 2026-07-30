@@ -124,6 +124,7 @@ export default function TranscribeApp() {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [health, setHealth] = useState<BackendHealth | null>(null);
+  const [summarizationEnabled, setSummarizationEnabled] = useState(false);
   const [filename, setFilename] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
@@ -133,7 +134,10 @@ export default function TranscribeApp() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
-      .then((d) => setHealth(d.backends))
+      .then((d) => {
+        setHealth(d.backends);
+        setSummarizationEnabled(Boolean(d.summarization));
+      })
       .catch(() => {});
   }, []);
 
@@ -314,7 +318,12 @@ export default function TranscribeApp() {
         )}
 
         {appState === "done" && transcript && (
-          <TranscriptView transcript={transcript} filename={filename} onReset={reset} />
+          <TranscriptView
+            transcript={transcript}
+            filename={filename}
+            onReset={reset}
+            summarizationEnabled={summarizationEnabled}
+          />
         )}
 
         {appState === "error" && (

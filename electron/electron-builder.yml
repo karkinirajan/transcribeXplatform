@@ -1,0 +1,122 @@
+appId: com.karkinirajan.transcribe
+productName: Transcribe
+copyright: Copyright © 2026 Nirajan Karki
+
+directories:
+  output: dist
+  buildResources: build-resources
+
+# Only the Electron shell itself is asar-packed; the Python runtime, ffmpeg and
+# the Next.js server must stay as real files on disk so they can be executed.
+files:
+  - main.js
+  - preload.js
+
+extraResources:
+  # Self-contained CPython + site-packages (scripts/bundle_runtime.py) and
+  # static ffmpeg/ffprobe (scripts/fetch_ffmpeg.py).
+  - from: ../build/runtime
+    to: runtime
+  # The Next.js standalone server (scripts/build_frontend.mjs).
+  - from: ../frontend/.next/standalone
+    to: frontend
+  - from: ../backend
+    to: backend
+    filter: ["**/*", "!__pycache__", "!**/__pycache__"]
+  - from: ../utilities_data
+    to: utilities_data
+    filter: ["**/*", "!__pycache__", "!**/__pycache__"]
+  - from: ../.env.example
+    to: .env.example
+
+# ---------------------------------------------------------------------------
+# Linux — AppImage runs anywhere; pacman is the native format for Arch/CachyOS
+# ---------------------------------------------------------------------------
+linux:
+  icon: build-resources/icon.png
+  # Required by the deb/pacman packagers; change to your own contact if you fork.
+  maintainer: Nirajan Karki <karkinirajan1999@gmail.com>
+  vendor: Nirajan Karki
+  category: AudioVideo
+  synopsis: Audio and video transcription with speaker identification
+  description: >
+    Transcribe audio and video files with speaker identification using
+    AssemblyAI, Deepgram, OpenAI, or a local Whisper model, and summarize the
+    result with AI.
+  # Flat name→value map of .desktop entries (electron-builder 25 format).
+  desktop:
+    Name: Transcribe
+    GenericName: Transcription Tool
+    Categories: AudioVideo;Audio;Utility;
+    Keywords: transcription;audio;video;speech;subtitles;summary;
+    MimeType: audio/mpeg;audio/wav;audio/flac;audio/ogg;video/mp4;video/x-matroska;video/quicktime;
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: pacman
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64]
+
+# ffmpeg is bundled, but these declarations mean the package still works if the
+# bundled binaries are stripped by a downstream repackager.
+deb:
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0]
+  recommends: [ffmpeg]
+pacman:
+  depends: [gtk3, nss, alsa-lib]
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+win:
+  icon: build-resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Transcribe
+  # The bundled runtime is thousands of small files; differential blocks keep
+  # updates and install time sane.
+  differentialPackage: false
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+mac:
+  icon: build-resources/icon.png
+  category: public.app-category.productivity
+  darkModeSupport: true
+  # The bundled interpreter and ffmpeg are unsigned third-party binaries; these
+  # entitlements let them run under the hardened runtime.
+  hardenedRuntime: true
+  entitlements: build-resources/entitlements.mac.plist
+  entitlementsInherit: build-resources/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+
+dmg:
+  title: Transcribe
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Nothing is published automatically; releases are attached by CI.
+publish: null

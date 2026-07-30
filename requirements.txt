@@ -1,22 +1,149 @@
-annotated-types==0.7.0
-faster-whisper>=1.0.0
-pytest>=7.0.0
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-python-multipart>=0.0.9
-aiofiles>=23.2.0
-openai>=1.30.0
-anyio==4.12.1
-assemblyai==0.48.4
-certifi==2026.1.4
+# Auto-generated from uv.lock — do not edit by hand.
+# Regenerate with:  uv export --frozen --no-dev --extra whisper --format requirements-txt
+# The project itself is managed with uv; see pyproject.toml.
+aiofiles==25.1.0
+    # via transcribe
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.14.2
+    # via
+    #   httpx
+    #   openai
+    #   starlette
+    #   watchfiles
+assemblyai==0.64.32
+    # via transcribe
+av==18.0.0
+    # via faster-whisper
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+click==8.4.2
+    # via
+    #   huggingface-hub
+    #   uvicorn
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via
+    #   click
+    #   tqdm
+ctranslate2==4.8.1
+    # via faster-whisper
+distro==1.9.0
+    # via openai
+fastapi==0.141.1
+    # via transcribe
+faster-whisper==1.2.1
+    # via transcribe
+filelock==3.32.2
+    # via huggingface-hub
+flatbuffers==25.12.19
+    # via onnxruntime
+fsspec==2026.7.0
+    # via huggingface-hub
 h11==0.16.0
+    # via
+    #   httpcore
+    #   uvicorn
+hf-xet==1.5.2 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+    # via huggingface-hub
 httpcore==1.0.9
+    # via httpx
+httptools==0.8.0
+    # via uvicorn
 httpx==0.28.1
-idna==3.11
-pydantic==2.12.5
-pydantic-settings==2.12.0
-pydantic_core==2.41.5
-python-dotenv==1.2.1
+    # via
+    #   assemblyai
+    #   huggingface-hub
+    #   openai
+    #   transcribe
+huggingface-hub==1.25.1
+    # via
+    #   faster-whisper
+    #   tokenizers
+idna==3.18
+    # via
+    #   anyio
+    #   httpx
+jiter==0.16.0
+    # via openai
+numpy==2.5.1
+    # via
+    #   ctranslate2
+    #   onnxruntime
+onnxruntime==1.28.0
+    # via faster-whisper
+openai==2.50.0
+    # via transcribe
+packaging==26.2
+    # via
+    #   huggingface-hub
+    #   onnxruntime
+protobuf==7.35.1
+    # via onnxruntime
+pydantic==2.13.4
+    # via
+    #   assemblyai
+    #   fastapi
+    #   openai
+    #   pydantic-settings
+    #   transcribe
+pydantic-core==2.46.4
+    # via pydantic
+pydantic-settings==2.14.2
+    # via
+    #   assemblyai
+    #   transcribe
+python-dotenv==1.2.2
+    # via
+    #   pydantic-settings
+    #   transcribe
+    #   uvicorn
+python-multipart==0.0.32
+    # via transcribe
+pyyaml==6.0.3
+    # via
+    #   ctranslate2
+    #   huggingface-hub
+    #   uvicorn
+setuptools==83.0.0
+    # via ctranslate2
+sniffio==1.3.1
+    # via openai
+starlette==1.3.1
+    # via fastapi
+tokenizers==0.23.1
+    # via faster-whisper
+tqdm==4.70.0
+    # via
+    #   faster-whisper
+    #   huggingface-hub
+    #   openai
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   assemblyai
+    #   fastapi
+    #   huggingface-hub
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   starlette
+    #   typing-inspection
 typing-inspection==0.4.2
-typing_extensions==4.15.0
-websockets==16.0
+    # via
+    #   fastapi
+    #   pydantic
+    #   pydantic-settings
+uvicorn==0.52.0
+    # via transcribe
+uvloop==0.22.1 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
+    # via uvicorn
+watchfiles==1.2.0
+    # via uvicorn
+websockets==17.0
+    # via
+    #   assemblyai
+    #   uvicorn

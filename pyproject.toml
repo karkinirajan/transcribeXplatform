@@ -1,0 +1,37 @@
+[project]
+name = "transcribe"
+version = "1.0.0"
+description = "Audio and video transcription with speaker identification — CLI, web app, and desktop app"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Nirajan Karki", email = "karkinirajan1999@gmail.com" }]
+requires-python = ">=3.12"
+
+# Core runtime: the API server, the CLI, and the three cloud providers.
+# Every one of these resolves to a wheel on linux-x64, win-x64, mac-x64 and
+# mac-arm64, which is what makes the bundled installers possible.
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "aiofiles>=23.2.0",
+    "assemblyai>=0.48.4",
+    "openai>=1.30.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.12.0",
+    "python-dotenv>=1.2.1",
+]
+
+[project.optional-dependencies]
+# Local offline transcription. ~400 MB of native wheels (ctranslate2,
+# onnxruntime, tokenizers) and no Intel-macOS wheels, hence opt-in.
+whisper = ["faster-whisper>=1.0.0"]
+
+[dependency-groups]
+dev = ["pytest>=7.0.0"]
+
+[tool.uv]
+# This repo is a FastAPI app plus a set of scripts, not an installable library,
+# so uv manages the environment without building/installing the project itself.
+package = false

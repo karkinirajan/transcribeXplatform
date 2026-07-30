@@ -2,3 +2,22 @@
 .env
 __pycache__/
 data/
+
+# Python (uv-managed)
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Build artifacts
+build/
+electron/dist/
+frontend/.next/
+frontend/out/
+
+# Generated icons are committed; their source SVG lives beside them.
+!electron/build-resources/icon.png
+!electron/build-resources/icon.ico
+
+# Node
+node_modules/
+npm-debug.log*

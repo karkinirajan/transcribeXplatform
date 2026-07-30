@@ -25,23 +25,29 @@ Audio and video transcription with speaker identification — available as a **C
 - **Universal format pipeline** — any audio or video file is normalised to 16 kHz mono WAV before upload via ffmpeg
 - **Real-time progress** — Server-Sent Events stream log lines to the UI as they happen
 - **Markdown output** — timestamped `[HH:MM:SS] Speaker: text` format
+- **One-click AI summary** — a **Summarize** button on every finished transcript produces an overview, key points, decisions and action items; long recordings are summarised map-reduce style
 - **Three usage modes** — CLI, web browser, and Electron desktop app
-- **122 automated tests** — pytest suite covers all providers and edge cases
+- **Self-contained installers** — Python, ffmpeg and Node are bundled; users install nothing else
+- **148 automated tests** — pytest suite covers all providers, the summarizer, the API and edge cases
 
 ---
 
 ## Quick Start
 
+> **Just want the app?** Grab an installer from
+> [Releases](https://github.com/karkinirajan/transcribe/releases) — they bundle
+> Python, ffmpeg and Node, so there is nothing else to install.
+
 ```bash
 # 1. Clone
-git clone https://github.com/kneeraazon404/transcribe
+git clone https://github.com/karkinirajan/transcribe
 cd transcribe
 
 # 2. Configure
 cp .env.example .env
 # Edit .env — add at least one API key (or use --backend whisper for free local mode)
 
-# 3. Install
+# 3. Install — uv creates the venv and installs everything from uv.lock
 make install
 
 # 4-A. Run as web app (two terminals)
@@ -51,6 +57,9 @@ make dev-web      # Next.js frontend on :3000
 # 4-B. Run as desktop app
 make dev          # Electron — starts both servers and opens the window
 ```
+
+Python tooling is managed with [uv](https://docs.astral.sh/uv/). If you do not
+have it: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
 ---
 
@@ -69,17 +78,18 @@ sudo apt install ffmpeg
 winget install FFmpeg
 ```
 
+> Not needed if you installed from a release artifact — ffmpeg and ffprobe are
+> bundled inside the app.
+
 ### Python dependencies
 
 ```bash
-pip install -r requirements.txt
+uv sync                      # core: AssemblyAI, Deepgram, OpenAI
+uv sync --extra whisper      # adds faster-whisper for offline transcription
 ```
 
-The local Whisper backend also requires:
-
-```bash
-pip install faster-whisper
-```
+`uv sync` installs the exact versions in `uv.lock`, which is resolved for
+Linux, macOS and Windows on x64 and arm64.
 
 ### Frontend & Electron
 
@@ -208,7 +218,8 @@ transcribe/
 │   ├── transcribe_aai.py        # AssemblyAI provider
 │   ├── transcribe_openai.py     # OpenAI Whisper API provider
 │   ├── transcribe_deepgram.py   # Deepgram REST API provider
-│   └── transcribe_whisper.py    # faster-whisper local provider
+│   ├── transcribe_whisper.py    # faster-whisper local provider
+│   └── summarize.py             # AI summary, map-reduce for long transcripts
 │
 ├── backend/                     # FastAPI REST API
 │   ├── main.py                  # Endpoints, job runner, SSE stream
@@ -219,14 +230,25 @@ transcribe/
 │       ├── TranscribeApp.tsx    # Root — state machine, provider cards
 │       ├── DropZone.tsx         # Drag-and-drop file picker
 │       ├── ProgressView.tsx     # Live SSE progress log
-│       └── TranscriptView.tsx   # Copy / .md / .txt download
+│       └── TranscriptView.tsx   # Summarize button, copy, .md / .txt download
 │
 ├── electron/                    # Electron cross-platform wrapper
-│   ├── main.js                  # Spawns FastAPI + Next.js, opens window
-│   └── preload.js               # Minimal context bridge
+│   ├── main.js                  # Spawns bundled Python + Next.js, opens window
+│   ├── preload.js               # Minimal context bridge
+│   ├── electron-builder.yml     # Installer targets for Linux / Windows / macOS
+│   └── build-resources/         # App icon and macOS entitlements
+│
+├── scripts/                     # Packaging pipeline
+│   ├── bundle_runtime.py        # uv → relocatable CPython + wheels
+│   ├── fetch_ffmpeg.py          # Static ffmpeg/ffprobe per platform
+│   ├── build_frontend.mjs       # Next.js standalone bundle
+│   └── build_installers.py      # Orchestrates everything → installers
+│
+├── packaging/arch/PKGBUILD      # Native Arch/CachyOS package (makepkg)
 │
 ├── executable_scripts/transcribe  # CLI entry point
-└── tests/                         # 122 pytest tests
+├── pyproject.toml + uv.lock       # uv-managed dependencies (all platforms)
+└── tests/                         # 148 pytest tests
 ```
 
 ### Request flow
@@ -264,7 +286,21 @@ Next.js rewrite proxy  →  FastAPI :8000
 | `GET` | `/api/jobs/{id}` | Poll status, messages, transcript |
 | `GET` | `/api/jobs/{id}/events` | SSE real-time progress stream |
 | `GET` | `/api/jobs/{id}/transcript` | Fetch completed transcript |
+| `POST` | `/api/summarize` | AI summary of a transcript → `{summary, model, chunks}` |
+| `POST` | `/api/jobs/{id}/summary` | Summarise a completed job without re-uploading |
 | `DELETE` | `/api/jobs/{id}` | Delete job and clean up temp files |
+
+**POST `/api/summarize` — JSON body**
+
+| Field | Type | Default | Notes |
+|-------|------|---------|-------|
+| `transcript` | string | — | Required. Transcript markdown |
+| `title` | string | `null` | Recording title, passed to the model as context |
+| `model` | string | `gpt-4o-mini` | Overrides `$SUMMARY_MODEL` |
+
+Returns `503` when no `OPENAI_API_KEY` is configured, `502` when the provider
+call fails. Transcripts over ~30 000 characters are summarised map-reduce style
+— each chunk is condensed, then the condensations are merged.
 
 **POST `/api/transcribe` — form fields**
 
@@ -280,20 +316,111 @@ Next.js rewrite proxy  →  FastAPI :8000
 
 ## Building for distribution
 
-```bash
-# Build Next.js production bundle
-make build
+The installers are **fully self-contained** — the target machine needs no
+Python, no Node.js and no ffmpeg. Each one ships:
 
-# Cross-platform Electron distributables
-cd electron
-npm run dist:mac    # macOS  → dist/*.dmg
-npm run dist:win    # Windows → dist/*.exe
-npm run dist:linux  # Linux  → dist/*.AppImage
+| Component | Source | Size |
+|---|---|---|
+| CPython 3.14 + all wheels | `uv python install` + `uv pip install` | ~119 MB |
+| Static ffmpeg + ffprobe | upstream static builds | ~152 MB |
+| Next.js standalone server | `output: "standalone"`, run by Electron's Node | ~33 MB |
+| Electron runtime | electron-builder | ~180 MB |
+
+### One command
+
+```bash
+uv run scripts/build_installers.py
 ```
 
-> **Note:** Electron distributables require Python 3.8+ and the pip dependencies
-> to be installed on the target machine. Bundling a full Python runtime
-> (e.g. via PyInstaller) would make the app truly self-contained.
+That assembles the runtime, fetches ffmpeg, builds the frontend and runs
+electron-builder for **both variants**:
+
+| Variant | Contents | Installer size |
+|---|---|---|
+| `standard` | AssemblyAI · Deepgram · OpenAI | ~215 MB |
+| `offline` | the above **+ local Whisper** | ~610 MB |
+
+Useful flags:
+
+```bash
+uv run scripts/build_installers.py --variant standard   # skip the large one
+uv run scripts/build_installers.py --targets AppImage   # one format only
+uv run scripts/build_installers.py --skip-ffmpeg        # use system ffmpeg
+uv run scripts/build_installers.py --clean              # wipe electron/dist first
+```
+
+### Per-OS output
+
+Run the same command **on each OS** — see the cross-compilation note below.
+
+| Host | Targets | Artifacts |
+|---|---|---|
+| Linux (Arch/CachyOS) | `AppImage` `pacman` `deb` `tar.gz` | `transcribe-1.0.0-x86_64.AppImage`, `transcribe-1.0.0-x64.pacman`, … |
+| Windows | `nsis` `portable` | `transcribe-1.0.0-x64.exe` (installer + portable) |
+| macOS | `dmg` `zip` | `transcribe-1.0.0-arm64.dmg`, `transcribe-1.0.0-x64.dmg` |
+
+Offline-variant artifacts get an `-offline` suffix, e.g.
+`transcribe-1.0.0-offline-x86_64.AppImage`.
+
+**Installing on Arch / CachyOS:**
+
+```bash
+sudo pacman -U electron/dist/transcribe-1.0.0-x64.pacman
+```
+
+For a package built by native Arch tooling instead of electron-builder's fpm
+backend — a real `.pkg.tar.zst` you can inspect with `namcap` — use the
+included PKGBUILD:
+
+```bash
+uv run scripts/build_installers.py --variant standard --targets tar.gz
+cd packaging/arch && makepkg -si
+
+VARIANT=offline makepkg -si     # the local-Whisper flavour
+```
+
+Both routes install to `/opt/transcribe`, add a `transcribe` launcher on
+`PATH`, and register a `.desktop` entry with the app icon.
+
+### Why there is no cross-compilation
+
+Three parts of the bundle are host-specific and cannot be produced from another
+OS:
+
+- the CPython tree comes from `uv python install`, which downloads for the host;
+- the static ffmpeg builds are per-OS binaries;
+- NSIS needs Wine to run on Linux, and DMG creation requires macOS.
+
+So: build Linux artifacts on Linux, `.exe` on Windows, `.dmg` on macOS. The
+build script itself is pure Python and runs unchanged on all three.
+
+### Individual steps
+
+```bash
+uv run scripts/bundle_runtime.py [--with-whisper]  # → build/runtime/python
+uv run scripts/fetch_ffmpeg.py                     # → build/runtime/bin
+node scripts/build_frontend.mjs                    # → frontend/.next/standalone
+cd electron && npx electron-builder --linux        # → electron/dist
+```
+
+### Where the app stores API keys
+
+A packaged install is read-only, so keys live in the per-user config directory,
+seeded from `.env.example` on first launch. Reach it from the app menu via
+**File → Open API Keys File** (⌘/Ctrl + `,`):
+
+| OS | Path |
+|---|---|
+| Linux | `~/.config/Transcribe/.env` |
+| macOS | `~/Library/Application Support/Transcribe/.env` |
+| Windows | `%APPDATA%\Transcribe\.env` |
+
+### Code signing
+
+Artifacts are unsigned. macOS users need to right-click → Open on first launch,
+and Windows shows a SmartScreen warning. To sign, set the standard
+electron-builder environment variables (`CSC_LINK` / `CSC_KEY_PASSWORD` on
+macOS, `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` on Windows) before building.
 
 ---
 
