@@ -1,13 +1,12 @@
 """Tests for ffmpeg_audio.py — audio normalization via ffmpeg."""
-import json
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from ffmpeg_audio import (
-    normalize_to_wav,
     FFmpegNotInstalledError,
     FFmpegProcessError,
+    normalize_to_wav,
 )
 from media_probe import MediaInfo
 
@@ -97,7 +96,7 @@ class TestNormalizeToWav:
         with patch("shutil.which", return_value="/usr/bin/ffmpeg"):
             with patch("ffmpeg_audio.probe_media", return_value=media_info):
                 with patch("subprocess.run", side_effect=fake_run):
-                    result = normalize_to_wav(audio, out_dir)
+                    normalize_to_wav(audio, out_dir)
 
         assert out_dir.exists()
 

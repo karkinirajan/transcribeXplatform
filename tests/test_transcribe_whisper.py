@@ -1,17 +1,16 @@
 """Tests for transcribe_whisper.py — faster-whisper local backend."""
 import builtins
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+from format_md import SpeakerTurn
 from transcribe_whisper import (
     WhisperNotInstalledError,
     _ensure_faster_whisper,
-    transcribe_with_whisper,
     transcribe_whisper_pipeline,
+    transcribe_with_whisper,
 )
-from format_md import SpeakerTurn
-
 
 # ---------------------------------------------------------------------------
 # _ensure_faster_whisper

@@ -8,7 +8,6 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Path setup — resolve utilities before any local imports
@@ -27,17 +26,27 @@ if _CONFIG_DIR:
     load_dotenv(Path(_CONFIG_DIR) / ".env")
 load_dotenv(_ROOT / ".env")
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from jobs import Job, JobStatus, TooManyJobsError, create_job, finish_job, get_job, remove_job
 from pydantic import BaseModel, Field
-
-from jobs import Job, JobStatus, create_job, get_job
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from summarize import (
     SummaryNotConfiguredError,
     SummaryProviderError,
     summarization_available,
     summarize_transcript,
+)
+from uploads import (
+    UploadTooLargeError,
+    clean_language,
+    clean_model,
+    clean_title,
+    copy_limited,
+    max_upload_bytes,
+    safe_upload_name,
 )
 
 # ---------------------------------------------------------------------------
@@ -45,18 +54,38 @@ from summarize import (
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Transcribe API", version="1.0.0")
 
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",   # Next.js dev
+    "http://127.0.0.1:3000",  # Next.js dev (127.0.0.1), and the packaged desktop app
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "app://.",                 # Electron production
+]
+
+# The API listens on the user's own machine, but a web page they visit can still send requests to it, and a page on an attacker's
+# domain can be made to resolve to 127.0.0.1 ("DNS rebinding"). Two checks close both:
+#  - the Host header must name this machine (a rebound page's Host is the attacker's domain);
+#  - a state-changing request that carries an Origin header must come from one of this app's own origins (a browser always sends Origin
+#    on a cross-site POST). Without them, any site could upload a file to the user's transcription account.
+# "testserver" is the host name Starlette's test client uses.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
+
+
+@app.middleware("http")
+async def refuse_cross_site_writes(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in ALLOWED_ORIGINS:
+            return JSONResponse({"detail": "Cross-site request refused."}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",   # Next.js dev
-        "http://127.0.0.1:3000",  # Next.js dev (127.0.0.1)
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "app://.",                 # Electron production
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -103,14 +132,13 @@ def _run_job(
     output_path: Path,
     backend: str,
     model: str,
-    language_code: Optional[str],
-    title: Optional[str],
+    language_code: str | None,
+    title: str | None,
 ) -> None:
     from ffmpeg_audio import normalize_to_wav
     from format_md import save_transcript_markdown
     from media_probe import probe_media
 
-    wav_path: Optional[Path] = None
     try:
         job.status = JobStatus.PROCESSING
         job.add_message(f"Processing: {input_path.name}")
@@ -144,24 +172,15 @@ def _run_job(
             title=title or input_path.stem,
         )
         job.transcript = md_path.read_text(encoding="utf-8")
-        job.status = JobStatus.COMPLETED
         job.add_message("Done!")
+        finish_job(job, JobStatus.COMPLETED)
 
     except Exception as exc:
-        job.status = JobStatus.FAILED
-        job.error = str(exc)
         job.add_message(f"Error: {exc}")
-
-    finally:
-        if wav_path and wav_path.exists():
-            try:
-                wav_path.unlink()
-                wav_path.parent.rmdir()
-            except Exception:
-                pass
+        finish_job(job, JobStatus.FAILED, str(exc))
 
 
-def _transcribe(job: Job, backend: str, model: str, wav_path: Path, language_code: Optional[str]):
+def _transcribe(job: Job, backend: str, model: str, wav_path: Path, language_code: str | None):
     """Dispatch to the correct provider and return a list of SpeakerTurn objects."""
 
     if backend == "assemblyai":
@@ -216,6 +235,7 @@ ALLOWED_EXTENSIONS = {
 
 @app.post("/api/transcribe", status_code=202)
 async def start_transcription(
+    request: Request,
     file: UploadFile = File(...),
     backend: str = Form("assemblyai"),
     model: str = Form(""),
@@ -235,20 +255,45 @@ async def start_transcription(
             detail=f"Unknown backend '{backend}'. Choose from: {', '.join(sorted(VALID_BACKENDS))}",
         )
 
+    try:
+        language_code = clean_language(language)
+        model_name = clean_model(model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    clean_name = clean_title(title)
+
+    limit = max_upload_bytes()
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit + 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"The file is larger than the {limit // (1024 * 1024)} MB limit.")
+
+    # The stored name is made from the browser's file name, so it is sanitised: only a plain name ever lands in the temp directory.
+    stored_name = safe_upload_name(file.filename, suffix)
     temp_dir = Path(tempfile.mkdtemp(prefix="transcribe_"))
-    input_path = temp_dir / (file.filename or f"upload{suffix}")
-    output_path = temp_dir / (Path(file.filename or "transcript").stem + ".md")
+    input_path = temp_dir / stored_name
+    output_path = temp_dir / (Path(stored_name).stem + ".md")
+
+    def _save() -> None:
+        with open(input_path, "wb") as f:
+            copy_limited(file.file, f, limit)
 
     try:
-        with open(input_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
-    except Exception as exc:
+        # a blocking copy of a large file must not stall the event loop that serves every other request
+        await run_in_threadpool(_save)
+    except UploadTooLargeError as exc:
         shutil.rmtree(temp_dir, ignore_errors=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save upload: {exc}")
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except OSError as exc:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="Failed to save the upload.") from exc
 
-    job = create_job(filename=file.filename or "upload", temp_dir=temp_dir)
+    try:
+        job = create_job(filename=stored_name, temp_dir=temp_dir)
+    except TooManyJobsError as exc:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     loop.run_in_executor(
         _executor,
         _run_job,
@@ -256,9 +301,9 @@ async def start_transcription(
         input_path,
         output_path,
         backend,
-        model or "",
-        language or None,
-        title or None,
+        model_name,
+        language_code,
+        clean_name,
     )
 
     return {"job_id": job.id}
@@ -334,8 +379,8 @@ def download_transcript(job_id: str):
 
 class SummarizeRequest(BaseModel):
     transcript: str = Field(..., min_length=1, description="Transcript markdown to summarise")
-    title: Optional[str] = Field(None, description="Recording title, used as context")
-    model: Optional[str] = Field(None, description="Override the summarisation model")
+    title: str | None = Field(None, description="Recording title, used as context")
+    model: str | None = Field(None, description="Override the summarisation model")
 
 
 @app.post("/api/summarize")
@@ -348,11 +393,11 @@ def summarize(payload: SummarizeRequest):
         )
     except SummaryNotConfiguredError as exc:
         # 503: the server is fine, it just has no key configured.
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SummaryProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {
         "summary": result.summary,
@@ -384,11 +429,8 @@ def summarize_job(job_id: str, model: str = Form("")):
 
 @app.delete("/api/jobs/{job_id}", status_code=204)
 def delete_job(job_id: str):
-    job = get_job(job_id)
-    if not job:
+    if not remove_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
-    if job._temp_dir and job._temp_dir.exists():
-        shutil.rmtree(job._temp_dir, ignore_errors=True)
     return None
 
 
@@ -398,4 +440,7 @@ def delete_job(job_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+    # Loopback by default: this API spends the owner's transcription API keys and has no sign-in, so it must not be reachable from the
+    # network. (It used to bind every interface.) Set TRANSCRIBE_HOST only if you put something with authentication in front of it.
+    uvicorn.run("main:app", host=os.getenv("TRANSCRIBE_HOST", "127.0.0.1"), port=8000, reload=True)

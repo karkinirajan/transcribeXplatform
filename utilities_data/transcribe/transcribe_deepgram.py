@@ -4,10 +4,8 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import httpx
-
 from ffmpeg_audio import AudioExtractResult, normalize_to_wav
 from format_md import SpeakerTurn, save_transcript_markdown
 from media_probe import probe_media
@@ -34,7 +32,7 @@ def transcribe_with_deepgram(
     audio_path: str | Path,
     *,
     model: str = "nova-3",
-    language_code: Optional[str] = None,
+    language_code: str | None = None,
 ) -> list[SpeakerTurn]:
     """
     Transcribe audio using the Deepgram REST API.
@@ -126,8 +124,8 @@ def transcribe_deepgram_pipeline(
     output_md: str | Path,
     *,
     model: str = "nova-3",
-    language_code: Optional[str] = None,
-    title: Optional[str] = None,
+    language_code: str | None = None,
+    title: str | None = None,
     keep_wav: bool = False,
 ) -> tuple[Path, AudioExtractResult]:
     """
@@ -141,7 +139,7 @@ def transcribe_deepgram_pipeline(
     try:
         media_info = probe_media(input_path)
     except Exception as e:
-        raise ValueError(f"Invalid audio/video file: {input_path.name}\n{e}")
+        raise ValueError(f"Invalid audio/video file: {input_path.name}\n{e}") from e
 
     if not media_info.has_audio:
         non_media = {".md", ".txt", ".json", ".pdf", ".doc", ".docx", ".html"}

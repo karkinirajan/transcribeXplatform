@@ -1,9 +1,8 @@
 """Tests for transcribe_openai.py — OpenAI Whisper API backend."""
 import builtins
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from transcribe_openai import (
     OpenAIKeyMissingError,
     OpenAINotInstalledError,
@@ -11,8 +10,6 @@ from transcribe_openai import (
     _ensure_openai,
     transcribe_with_openai,
 )
-from format_md import SpeakerTurn
-
 
 # ---------------------------------------------------------------------------
 # _ensure_openai

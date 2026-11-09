@@ -29,9 +29,30 @@ dependencies = [
 whisper = ["faster-whisper>=1.0.0"]
 
 [dependency-groups]
-dev = ["pytest>=7.0.0"]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.17.4",
+]
 
 [tool.uv]
 # This repo is a FastAPI app plus a set of scripts, not an installable library,
 # so uv manages the environment without building/installing the project itself.
 package = false
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+# The mutation driver is a compact standalone script copied between repositories; its list is data.
+extend-exclude = ["tests/mutation"]
+
+[tool.ruff.lint]
+# Errors and pyflakes, bugbear, import order, and pyupgrade. (Style rules that would reformat the existing code are not selected.)
+select = ["E4", "E7", "E9", "F", "B", "I", "UP"]
+# B008: FastAPI's File(...) and Form(...) defaults are its idiom, not a mistake.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# sys.path is extended before the local imports (the modules live in a sibling directory that is not a package).
+"backend/main.py" = ["E402"]
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]

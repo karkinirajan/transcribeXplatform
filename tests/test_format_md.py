@@ -1,17 +1,15 @@
 """Tests for format_md.py — timestamp formatting, speaker turn conversion, markdown output."""
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from format_md import (
     SpeakerTurn,
-    format_timestamp,
-    is_detected_name,
-    format_transcript_as_markdown,
     assemblyai_to_speaker_turns,
+    format_timestamp,
+    format_transcript_as_markdown,
+    is_detected_name,
     save_transcript_markdown,
 )
-
 
 # ---------------------------------------------------------------------------
 # format_timestamp
@@ -168,7 +166,7 @@ class TestFormatTranscriptAsMarkdown:
             self._turn("B", 10, "Second B"),
         ]
         result = format_transcript_as_markdown(turns)
-        lines = [l for l in result.splitlines() if l.strip()]
+        lines = [line for line in result.splitlines() if line.strip()]
         assert "Speaker 2: First B" in lines[0]
         assert "Speaker 1: First A" in lines[1]
         assert "Speaker 2: Second B" in lines[2]

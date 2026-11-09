@@ -80,7 +80,7 @@ def normalize_to_wav(
     cmd += ["-c:a", "pcm_s16le", str(out_wav)]
 
     proc = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        cmd, capture_output=True, text=True
     )
     if proc.returncode != 0:
         tail = "\n".join(proc.stderr.splitlines()[-25:])

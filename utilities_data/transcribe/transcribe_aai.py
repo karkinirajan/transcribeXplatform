@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import assemblyai as aai
 from dotenv import load_dotenv
@@ -44,7 +43,7 @@ def _ensure_api_key() -> str:
 def transcribe_audio_file(
     audio_path: str | Path,
     *,
-    language_code: Optional[str] = None,
+    language_code: str | None = None,
     speaker_labels: bool = True,
     punctuate: bool = True,
     format_text: bool = True,
@@ -156,8 +155,8 @@ def transcribe_with_normalization(
     input_file: str | Path,
     output_md: str | Path,
     *,
-    language_code: Optional[str] = None,
-    title: Optional[str] = None,
+    language_code: str | None = None,
+    title: str | None = None,
     keep_wav: bool = False,
 ) -> tuple[Path, AudioExtractResult]:
     """
@@ -186,7 +185,7 @@ def transcribe_with_normalization(
             f"Invalid audio/video file: {input_path.name}\n"
             f"Please provide a valid audio or video file (e.g., MP3, MP4, WAV, M4A, etc.)\n"
             f"Error: {e}"
-        )
+        ) from e
 
     # Check if file has audio stream
     if not media_info.has_audio:

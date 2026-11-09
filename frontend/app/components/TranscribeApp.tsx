@@ -114,10 +114,14 @@ interface BackendHealth {
 // Component
 // ---------------------------------------------------------------------------
 
+function defaultModelFor(key: BackendKey): string {
+  return PROVIDERS.find((p) => p.key === key)?.defaultModel ?? "";
+}
+
 export default function TranscribeApp() {
   const [appState, setAppState] = useState<AppState>("idle");
   const [selectedBackend, setSelectedBackend] = useState<BackendKey>("assemblyai");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(() => defaultModelFor("assemblyai"));
   const [language, setLanguage] = useState("");
   const [title, setTitle] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
@@ -141,10 +145,12 @@ export default function TranscribeApp() {
       .catch(() => {});
   }, []);
 
-  // Reset model when backend changes
-  useEffect(() => {
-    setModel(provider.defaultModel);
-  }, [selectedBackend, provider.defaultModel]);
+  // Choosing another provider resets the model to that provider's default. (This used to be an effect that set state when the
+  // selection changed, which renders twice; it belongs in the handler that changes the selection.)
+  const selectBackend = useCallback((key: BackendKey) => {
+    setSelectedBackend(key);
+    setModel(defaultModelFor(key));
+  }, []);
 
   const reset = useCallback(() => {
     esRef.current?.close();
@@ -253,7 +259,7 @@ export default function TranscribeApp() {
               providers={PROVIDERS}
               selected={selectedBackend}
               health={health}
-              onSelect={setSelectedBackend}
+              onSelect={selectBackend}
             />
 
             {/* Model selector (only for providers that have it) */}

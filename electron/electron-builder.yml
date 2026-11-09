@@ -11,6 +11,7 @@ directories:
 files:
   - main.js
   - preload.js
+  - url-policy.js
 
 extraResources:
   # Self-contained CPython + site-packages (scripts/bundle_runtime.py) and

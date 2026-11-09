@@ -150,7 +150,7 @@ def main() -> int:
     targets = args.targets or DEFAULT_TARGETS[system]
     variants = list(VARIANTS) if args.variant == "both" else [args.variant]
 
-    print(f"Transcribe installer build")
+    print("Transcribe installer build")
     print(f"  host:     {platform.system()} {platform.machine()}")
     print(f"  variants: {', '.join(variants)}")
     print(f"  targets:  {', '.join(targets)}")

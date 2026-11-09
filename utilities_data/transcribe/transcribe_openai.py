@@ -4,7 +4,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from ffmpeg_audio import AudioExtractResult, normalize_to_wav
 from format_md import SpeakerTurn, save_transcript_markdown
@@ -29,7 +28,7 @@ def _ensure_openai() -> None:
     except ImportError:
         raise OpenAINotInstalledError(
             "openai package not installed. Run: pip install openai"
-        )
+        ) from None
 
 
 def _ensure_api_key() -> str:
@@ -46,7 +45,7 @@ def transcribe_with_openai(
     audio_path: str | Path,
     *,
     model: str = "gpt-4o-mini-transcribe",
-    language_code: Optional[str] = None,
+    language_code: str | None = None,
 ) -> list[SpeakerTurn]:
     """
     Transcribe audio using the OpenAI audio transcriptions API.
@@ -126,8 +125,8 @@ def transcribe_openai_pipeline(
     output_md: str | Path,
     *,
     model: str = "gpt-4o-mini-transcribe",
-    language_code: Optional[str] = None,
-    title: Optional[str] = None,
+    language_code: str | None = None,
+    title: str | None = None,
     keep_wav: bool = False,
 ) -> tuple[Path, AudioExtractResult]:
     """
@@ -143,7 +142,7 @@ def transcribe_openai_pipeline(
     except Exception as e:
         raise ValueError(
             f"Invalid audio/video file: {input_path.name}\n{e}"
-        )
+        ) from e
 
     if not media_info.has_audio:
         non_media = {".md", ".txt", ".json", ".pdf", ".doc", ".docx", ".html"}

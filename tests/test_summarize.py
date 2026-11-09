@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from summarize import (
     CHUNK_CHARS,
     MAX_SINGLE_PASS_CHARS,

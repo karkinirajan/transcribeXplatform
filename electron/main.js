@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, session, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
+const { isAppUrl, isSafeExternalUrl } = require("./url-policy");
 
 // ---------------------------------------------------------------------------
 // Config
@@ -249,14 +250,32 @@ async function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
-  // External links belong in the user's browser, not in an app window.
+  // External links belong in the user's browser, not in an app window, and only web links: shell.openExternal hands a URL to the
+  // operating system, which will start whatever handles file:, smb:, ms-msdt: and the like. (Any URL used to be passed on.)
+  const openExternally = (url) => {
+    if (isSafeExternalUrl(url)) shell.openExternal(url);
+  };
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openExternally(url);
     return { action: "deny" };
   });
+
+  // The window shows the local app and nothing else: a link or a redirect that leads elsewhere opens in the browser instead.
+  const keepInsideApp = (event, url) => {
+    if (isAppUrl(url, NEXT_PORT)) return;
+    event.preventDefault();
+    openExternally(url);
+  };
+  mainWindow.webContents.on("will-navigate", keepInsideApp);
+  mainWindow.webContents.on("will-redirect", keepInsideApp);
+  mainWindow.webContents.on("will-attach-webview", (event) => event.preventDefault());
+
+  // The app needs no camera, microphone, location or the like.
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
   mainWindow.on("closed", () => {

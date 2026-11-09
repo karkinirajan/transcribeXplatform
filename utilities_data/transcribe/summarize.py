@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 # Roughly 4 chars/token; ~30k chars keeps a single pass well inside the window
 # while leaving room for the prompt and the response.
@@ -119,7 +118,7 @@ def _chunk_text(text: str, size: int = CHUNK_CHARS) -> list[str]:
     return chunks
 
 
-def _get_client(api_key: Optional[str] = None):
+def _get_client(api_key: str | None = None):
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key:
         raise SummaryNotConfiguredError(
@@ -156,9 +155,9 @@ def _complete(client, model: str, instructions: str, body: str) -> str:
 def summarize_transcript(
     markdown: str,
     *,
-    model: Optional[str] = None,
-    api_key: Optional[str] = None,
-    title: Optional[str] = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    title: str | None = None,
 ) -> SummaryResult:
     """
     Summarise a finished transcript.

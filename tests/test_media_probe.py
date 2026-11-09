@@ -1,14 +1,12 @@
 """Tests for media_probe.py — ffprobe wrapper and MediaInfo parsing."""
 import json
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from media_probe import (
-    MediaInfo,
-    probe_media,
     FFprobeNotInstalledError,
     FFprobeProcessError,
+    probe_media,
 )
 
 AUDIO_ONLY_OUTPUT = json.dumps({

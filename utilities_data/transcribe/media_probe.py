@@ -5,7 +5,6 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 class FFprobeNotInstalledError(RuntimeError):
@@ -19,11 +18,11 @@ class FFprobeProcessError(RuntimeError):
 @dataclass(frozen=True)
 class MediaInfo:
     path: Path
-    duration_seconds: Optional[float]
+    duration_seconds: float | None
     has_audio: bool
     has_video: bool
-    audio_codec: Optional[str]
-    video_codec: Optional[str]
+    audio_codec: str | None
+    video_codec: str | None
 
 
 def _ensure_ffprobe_installed() -> None:
@@ -55,7 +54,7 @@ def probe_media(path: str | Path) -> MediaInfo:
     ]
 
     proc = subprocess.run(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        cmd, capture_output=True, text=True
     )
     if proc.returncode != 0:
         tail = "\n".join(proc.stderr.splitlines()[-25:])

@@ -11,6 +11,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -n api,next,electron -c magenta,cyan,yellow \"npm run dev:api\" \"npm run dev:next\" \"wait-on http://127.0.0.1:3000 && electron .\"",
+    "test": "node --test test/",
     "dev:api": "uv run --project .. python ../backend/main.py",
     "dev:next": "cd ../frontend && npm run dev",
     "assemble:runtime": "uv run --project .. ../scripts/bundle_runtime.py",
@@ -24,9 +25,15 @@
     "dist:linux": "npm run assemble && electron-builder --linux"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0",
-    "electron": "^35.0.0",
-    "electron-builder": "^25.0.0",
-    "wait-on": "^8.0.0"
+    "concurrently": "^10.0.7",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "wait-on": "^9.5.1"
+  },
+  "overrides": {
+    "minimatch": "^11.0.5"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

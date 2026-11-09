@@ -40,9 +40,10 @@ adds offline transcription. ffmpeg is needed only when running from source.
 
 ```bash
 make dev        # desktop app (Electron + both servers)
-make dev-api    # backend only, :8000
+make dev-api    # backend only, 127.0.0.1:8000
 make dev-web    # frontend only, :3000
-make test       # 148 tests
+make test       # 289 Python tests
+make check      # ruff + Python tests + the desktop shell's tests
 ```
 
 CLI:
@@ -72,6 +73,8 @@ ASSEMBLYAI_API_KEY=
 DEEPGRAM_API_KEY=
 OPENAI_API_KEY=      # also powers the Summarize button
 # SUMMARY_MODEL=gpt-4o-mini
+# TRANSCRIBE_MAX_UPLOAD_MB=2048   # largest accepted upload
+# TRANSCRIBE_HOST=127.0.0.1       # bind address of the dev backend (keep it on loopback)
 ```
 
 `GET /api/health` reports which providers are ready.
@@ -94,11 +97,16 @@ are summarised map-reduce style — each chunk condensed, then merged — so a
 | `GET` | `/api/jobs/{id}/transcript` | Completed transcript |
 | `POST` | `/api/summarize` | `{transcript, title?, model?}` → summary |
 | `POST` | `/api/jobs/{id}/summary` | Summarise a completed job |
-| `DELETE` | `/api/jobs/{id}` | Delete job, clean temp files |
+| `DELETE` | `/api/jobs/{id}` | Forget the job (its recording is already deleted when it finishes) |
 
 `/api/transcribe` form fields: `file` (required), `backend`, `model`,
 `language`, `title`. Summarize returns `503` with no key, `502` on provider
-failure.
+failure. An upload over the size limit gets `413`; a bad `language` or `model`
+`400`; `503` when every job slot is busy.
+
+The API has no sign-in and listens on `127.0.0.1` only. Requests whose `Host`
+is not this machine, and writes from another website's page, are refused
+(see [docs/02-security.md](docs/02-security.md)).
 
 ## Building installers
 
@@ -144,7 +152,8 @@ frontend/                   Next.js 16 + Tailwind
 electron/                   Desktop shell + electron-builder config
 scripts/                    Runtime bundler, ffmpeg fetch, installer build
 packaging/arch/             Native Arch PKGBUILD
-tests/                      148 pytest tests
+tests/                      289 pytest tests + tests/mutation (47 mutants)
+docs/                       Architecture, security, testing, operations
 ```
 
 ## Limits
@@ -155,6 +164,17 @@ tests/                      148 pytest tests
 | Deepgram | 2 GB | — |
 | OpenAI | **25 MB** | ~13 min |
 | Whisper (local) | RAM-bound | RAM-bound |
+
+## Documentation
+
+| Chapter | Covers |
+|---|---|
+| [01 Architecture](docs/01-architecture.md) | The pieces, a job's life, who may call the API |
+| [02 Security](docs/02-security.md) | What was fixed (upload path traversal, CSRF/DNS rebinding, the open dev server), settings, what is left |
+| [03 Testing](docs/03-testing.md) | The suites and the mutation checks |
+| [04 Operations](docs/04-operations.md) | Commands, what to do before releasing, settings, CI |
+| [VERSIONS.md](VERSIONS.md) | What it runs on and why |
+| [work-done.md](work-done.md) | What was there and what changed, file by file |
 
 ## License
 

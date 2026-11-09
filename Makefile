@@ -1,4 +1,4 @@
-.PHONY: install install-whisper dev dev-api dev-web test lint \
+.PHONY: install install-whisper dev dev-api dev-web test test-electron lint check \
         runtime ffmpeg frontend dist dist-standard dist-offline clean help
 
 # Python tooling is uv end to end; `uv sync` creates .venv from uv.lock.
@@ -12,6 +12,9 @@ help:
 	@echo "  make dev-api          Run only the FastAPI backend on :8000"
 	@echo "  make dev-web          Run only the Next.js frontend on :3000"
 	@echo "  make test             Run the pytest suite"
+	@echo "  make test-electron    Run the desktop shell's tests"
+	@echo "  make lint             ruff check"
+	@echo "  make check            lint + all tests"
 	@echo ""
 	@echo "Packaging (builds for the OS you run it on)"
 	@echo "  make dist             Both installer variants for this OS"
@@ -47,6 +50,14 @@ dev-web:
 
 test:
 	$(UV) run pytest -v
+
+test-electron:
+	cd electron && npm test
+
+lint:
+	$(UV) run ruff check .
+
+check: lint test test-electron
 
 # ---------------------------------------------------------------------------
 # Packaging

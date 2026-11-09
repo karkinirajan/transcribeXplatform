@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -42,7 +41,7 @@ def is_detected_name(label: str) -> bool:
 def format_transcript_as_markdown(
     speaker_turns: list[SpeakerTurn],
     *,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> str:
     """
     Format speaker turns as Markdown transcript.
@@ -77,7 +76,7 @@ def format_transcript_as_markdown(
 
 def assemblyai_to_speaker_turns(
     utterances,
-    speaker_names: Optional[dict[str, str]] = None,
+    speaker_names: dict[str, str] | None = None,
 ) -> list[SpeakerTurn]:
     """
     Convert AssemblyAI utterances to SpeakerTurn objects.
@@ -116,7 +115,7 @@ def save_transcript_markdown(
     speaker_turns: list[SpeakerTurn],
     output_path: str | Path,
     *,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> Path:
     """
     Save formatted transcript to markdown file.

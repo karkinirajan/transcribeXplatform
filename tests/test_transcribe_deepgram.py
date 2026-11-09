@@ -1,15 +1,12 @@
 """Tests for transcribe_deepgram.py — Deepgram REST API backend."""
-import json
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from transcribe_deepgram import (
     DeepgramKeyMissingError,
     _ensure_api_key,
     transcribe_with_deepgram,
 )
-
 
 # ---------------------------------------------------------------------------
 # _ensure_api_key

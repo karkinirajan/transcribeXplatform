@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Optional
 
 from ffmpeg_audio import AudioExtractResult, normalize_to_wav
 from format_md import SpeakerTurn, save_transcript_markdown
@@ -20,14 +19,14 @@ def _ensure_faster_whisper() -> None:
     except ImportError:
         raise WhisperNotInstalledError(
             "faster-whisper not installed. Run: pip install faster-whisper"
-        )
+        ) from None
 
 
 def transcribe_with_whisper(
     audio_path: str | Path,
     *,
     model_size: str = "base",
-    language_code: Optional[str] = None,
+    language_code: str | None = None,
     device: str = "cpu",
     compute_type: str = "int8",
 ) -> list[SpeakerTurn]:
@@ -89,8 +88,8 @@ def transcribe_whisper_pipeline(
     output_md: str | Path,
     *,
     model_size: str = "base",
-    language_code: Optional[str] = None,
-    title: Optional[str] = None,
+    language_code: str | None = None,
+    title: str | None = None,
     keep_wav: bool = False,
     device: str = "cpu",
 ) -> tuple[Path, AudioExtractResult]:
@@ -121,7 +120,7 @@ def transcribe_whisper_pipeline(
             f"Invalid audio/video file: {input_path.name}\n"
             f"Please provide a valid audio or video file (e.g., MP3, MP4, WAV, M4A, etc.)\n"
             f"Error: {e}"
-        )
+        ) from e
 
     if not media_info.has_audio:
         non_media_extensions = {".md", ".txt", ".json", ".pdf", ".doc", ".docx", ".html"}

@@ -1,16 +1,14 @@
 """Tests for transcribe_aai.py — AssemblyAI integration and speaker name extraction."""
-import os
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from transcribe_aai import (
     AssemblyAIError,
     _ensure_api_key,
     _extract_speaker_names,
     transcribe_with_normalization,
 )
-
 
 # ---------------------------------------------------------------------------
 # _ensure_api_key
