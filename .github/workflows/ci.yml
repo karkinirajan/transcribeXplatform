@@ -18,7 +18,7 @@ jobs:
     name: Python (ruff, pytest, audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # uv installs the Python in .python-version itself, so no setup-python step is needed.
       - name: Install uv
         run: pipx install uv
@@ -44,8 +44,8 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -71,8 +71,8 @@ jobs:
       run:
         working-directory: electron
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
